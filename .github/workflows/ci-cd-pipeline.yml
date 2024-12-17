@@ -6,7 +6,7 @@ on:
       - main  # This will trigger the pipeline on a push to the main branch
   pull_request:
     branches:
-      - main  # This will also trigger the pipeline for PRs to the main branch
+      - master  # This will also trigger the pipeline for PRs to the main branch
 
 jobs:
   build-and-deploy:
