@@ -1,4 +1,4 @@
-name: CI/CD Pipeline for GKE with ArgoCD
+name: CI/CD Pipeline for React App on GKE with ArgoCD
 
 on:
   push:
@@ -17,42 +17,59 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Set up Docker Buildx (for building multi-platform images)
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      # Log in to Google Cloud
-      - name: Google Cloud Login
-        uses: google-github-actions/auth@v0
+      # Set up Node.js (for React app)
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          node-version: '18'  # Specify the Node.js version for your React app
 
-      # Set up Docker Build
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v2
-
-      # Build Docker image and push it to Google Container Registry (GCR)
-      - name: Build and Push Docker Image to GCR
+      # Install dependencies
+      - name: Install Dependencies
         run: |
-          IMAGE_NAME=gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-microservice:${{ github.sha }}
-          docker build -t $IMAGE_NAME .
-          docker push $IMAGE_NAME
+          npm install
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
 
-      # Run linting (using ESLint for Node.js as an example)
+      # Run linting (optional)
       - name: Run Linting
         run: |
-          npm install
           npm run lint
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
 
-      # Run Tests
+      # Run Tests (optional)
       - name: Run Tests
         run: |
-          npm install
           npm test
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
+      # Build React app
+      - name: Build React App
+        run: |
+          npm run build
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
+      # Set up Docker Buildx (for building multi-platform images)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Log in to Google Cloud using gcloud CLI (using your Gmail)
+      - name: Google Cloud Login
+        run: |
+          gcloud auth login --no-launch-browser
+          gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
+          gcloud auth configure-docker gcr.io
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
+      # Build Docker image and push it to Google Container Registry (GCR)
+      - name: Build and Push Docker Image to GCR
+        run: |
+          IMAGE_NAME=gcr.io/${{ secrets.GCP_PROJECT_ID }}/web-apptwo:latest
+          docker build -t $IMAGE_NAME .
+          docker push $IMAGE_NAME
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
 
@@ -65,7 +82,7 @@ jobs:
 
       - name: Get GKE Credentials
         run: |
-          gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --zone ${{ secrets.GKE_CLUSTER_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
+          gcloud container clusters get-credentials minimal-cluster --zone asia-east2-b --project ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Trigger ArgoCD to Deploy
         run: |
