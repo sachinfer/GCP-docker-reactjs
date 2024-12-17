@@ -1,0 +1,73 @@
+name: CI/CD Pipeline for GKE with ArgoCD
+
+on:
+  push:
+    branches:
+      - main  # This will trigger the pipeline on a push to the main branch
+  pull_request:
+    branches:
+      - main  # This will also trigger the pipeline for PRs to the main branch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Set up Docker Buildx (for building multi-platform images)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Log in to Google Cloud
+      - name: Google Cloud Login
+        uses: google-github-actions/auth@v0
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # Set up Docker Build
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v2
+
+      # Build Docker image and push it to Google Container Registry (GCR)
+      - name: Build and Push Docker Image to GCR
+        run: |
+          IMAGE_NAME=gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-microservice:${{ github.sha }}
+          docker build -t $IMAGE_NAME .
+          docker push $IMAGE_NAME
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
+      # Run linting (using ESLint for Node.js as an example)
+      - name: Run Linting
+        run: |
+          npm install
+          npm run lint
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
+      # Run Tests
+      - name: Run Tests
+        run: |
+          npm install
+          npm test
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
+      # Deploy to GKE using ArgoCD
+      - name: Set up kubectl
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Get GKE Credentials
+        run: |
+          gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --zone ${{ secrets.GKE_CLUSTER_ZONE }} --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Trigger ArgoCD to Deploy
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER }} --auth-token ${{ secrets.ARGOCD_AUTH_TOKEN }} --insecure
+          argocd app sync my-app --auth-token ${{ secrets.ARGOCD_AUTH_TOKEN }} --insecure
